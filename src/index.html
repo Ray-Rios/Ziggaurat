@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PowerShell Terminal</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-bg: #1e1e2e;
+            --secondary-bg: #2a2a3e;
+            --accent: #89b4fa;
+            --accent-hover: #a6c8ff;
+            --text: #cdd6f4;
+            --text-dim: #9399b2;
+            --success: #a6e3a1;
+            --error: #f38ba8;
+            --border: #45475a;
+            --sidebar-width: 300px;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--primary-bg) 0%, #181825 100%);
+            color: var(--text);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Sidebar Styles */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: var(--secondary-bg);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            z-index: 10;
+        }
+
+        .sidebar.collapsed {
+            transform: translateX(calc(-1 * var(--sidebar-width)));
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            background: linear-gradient(135deg, var(--secondary-bg) 0%, #232338 100%);
+        }
+
+        .sidebar-header h2 {
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: var(--accent);
+        }
+
+        .search-box {
+            width: 100%;
+            padding: 10px;
+            background: var(--primary-bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(137, 180, 250, 0.1);
+        }
+
+        .command-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .command-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: var(--primary-bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            animation: slideIn 0.3s ease forwards;
+            opacity: 0;
+        }
+
+        @keyframes slideIn {
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .command-item:hover {
+            background: #252538;
+            border-color: var(--accent);
+            transform: translateX(5px);
+        }
+
+        .command-name {
+            font-weight: 600;
+            color: var(--accent);
+            margin-bottom: 4px;
+            font-size: 14px;
+        }
+
+        .command-desc {
+            font-size: 12px;
+            color: var(--text-dim);
+            line-height: 1.4;
+        }
+
+        .add-command-btn {
+            margin: 10px;
+            padding: 12px;
+            background: var(--accent);
+            color: var(--primary-bg);
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .add-command-btn:hover {
+            background: var(--accent-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(137, 180, 250, 0.3);
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .toggle-sidebar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: var(--secondary-bg);
+            border: 1px solid var(--border);
+            color: var(--accent);
+            padding: 10px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 20px;
+            transition: all 0.2s ease;
+            z-index: 5;
+        }
+
+        .toggle-sidebar:hover {
+            background: var(--accent);
+            color: var(--primary-bg);
+            transform: scale(1.1);
+        }
+
+        .header {
+            padding: 20px 20px 20px 80px;
+            border-bottom: 1px solid var(--border);
+            background: var(--secondary-bg);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            background: linear-gradient(135deg, var(--accent) 0%, #b4befe 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .terminal-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            overflow: hidden;
+        }
+
+        .input-section {
+            margin-bottom: 20px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .command-input {
+            flex: 1;
+            padding: 15px;
+            background: var(--secondary-bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 14px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            transition: all 0.2s ease;
+        }
+
+        .command-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(137, 180, 250, 0.1);
+        }
+
+        .execute-btn {
+            padding: 15px 30px;
+            background: var(--accent);
+            color: var(--primary-bg);
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            font-size: 14px;
+        }
+
+        .execute-btn:hover {
+            background: var(--accent-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(137, 180, 250, 0.3);
+        }
+
+        .execute-btn:active {
+            transform: translateY(0);
+        }
+
+        .output-section {
+            flex: 1;
+            background: var(--secondary-bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 20px;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .output-line {
+            margin-bottom: 8px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .output-prompt {
+            color: var(--accent);
+            margin-right: 8px;
+        }
+
+        .output-success {
+            color: var(--success);
+        }
+
+        .output-error {
+            color: var(--error);
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+            z-index: 100;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: var(--secondary-bg);
+            padding: 30px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            max-width: 500px;
+            width: 90%;
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .modal-content h3 {
+            margin-bottom: 20px;
+            color: var(--accent);
+        }
+
+        .modal-content input,
+        .modal-content textarea {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            background: var(--primary-bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 14px;
+        }
+
+        .modal-content textarea {
+            min-height: 100px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            resize: vertical;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .modal-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .modal-btn-primary {
+            background: var(--accent);
+            color: var(--primary-bg);
+        }
+
+        .modal-btn-primary:hover {
+            background: var(--accent-hover);
+        }
+
+        .modal-btn-secondary {
+            background: var(--border);
+            color: var(--text);
+        }
+
+        .modal-btn-secondary:hover {
+            background: #585b70;
+        }
+
+        /* Scrollbar Styles */
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--primary-bg);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--accent);
+        }
+
+        /* Loading Animation */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid var(--border);
+            border-radius: 50%;
+            border-top-color: var(--accent);
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h2>📋 Saved Commands</h2>
+                <input type="text" class="search-box" id="searchBox" placeholder="Search commands...">
+            </div>
+            <div class="command-list" id="commandList"></div>
+            <button class="add-command-btn" onclick="openAddCommandModal()">+ Add Command</button>
+        </aside>
+
+        <main class="main-content">
+            <button class="toggle-sidebar" onclick="toggleSidebar()">☰</button>
+            
+            <div class="header">
+                <h1>🖥️ PowerShell Terminal</h1>
+            </div>
+
+            <div class="terminal-container">
+                <div class="input-section">
+                    <div class="input-group">
+                        <input type="text" class="command-input" id="commandInput" 
+                               placeholder="Enter PowerShell command..." 
+                               onkeypress="handleKeyPress(event)">
+                        <button class="execute-btn" onclick="executeCommand()">Execute</button>
+                    </div>
+                </div>
+
+                <div class="output-section" id="output">
+                    <div class="output-line">
+                        <span class="output-prompt">PS></span>
+                        <span class="output-success">PowerShell Terminal Ready</span>
+                    </div>
+                    <div class="output-line">
+                        <span class="output-prompt">PS></span>
+                        <span class="output-success">Type a command or select from saved commands</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Add Command Modal -->
+    <div class="modal" id="addCommandModal">
+        <div class="modal-content">
+            <h3>Add New Command</h3>
+            <input type="text" id="commandName" placeholder="Command Name">
+            <textarea id="commandText" placeholder="PowerShell Command"></textarea>
+            <input type="text" id="commandDescription" placeholder="Description (optional)">
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-secondary" onclick="closeAddCommandModal()">Cancel</button>
+                <button class="modal-btn modal-btn-primary" onclick="saveCommand()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Default Windows Admin Commands
+        const defaultCommands = [
+            { name: "Get System Info", command: "Get-ComputerInfo", description: "Display detailed system information" },
+            { name: "List Services", command: "Get-Service", description: "List all Windows services" },
+            { name: "List Processes", command: "Get-Process", description: "Display all running processes" },
+            { name: "Disk Usage", command: "Get-PSDrive -PSProvider FileSystem", description: "Show disk space usage" },
+            { name: "Network Adapters", command: "Get-NetAdapter", description: "List network adapters" },
+            { name: "IP Configuration", command: "Get-NetIPConfiguration", description: "Display IP configuration" },
+            { name: "Event Log Errors", command: "Get-EventLog -LogName System -EntryType Error -Newest 10", description: "Show recent system errors" },
+            { name: "Windows Updates", command: "Get-WindowsUpdate", description: "Check for Windows updates" },
+            { name: "Installed Programs", command: "Get-WmiObject -Class Win32_Product | Select-Object Name, Version", description: "List installed programs" },
+            { name: "User Accounts", command: "Get-LocalUser", description: "List local user accounts" },
+            { name: "Group Members", command: "Get-LocalGroupMember -Group 'Administrators'", description: "Show administrators group members" },
+            { name: "Scheduled Tasks", command: "Get-ScheduledTask", description: "List scheduled tasks" },
+            { name: "Firewall Rules", command: "Get-NetFirewallRule | Where-Object {$_.Enabled -eq 'True'}", description: "Show enabled firewall rules" },
+            { name: "CPU Usage", command: "Get-Counter '\\Processor(_Total)\\% Processor Time'", description: "Display CPU usage" },
+            { name: "Memory Usage", command: "Get-Counter '\\Memory\\Available MBytes'", description: "Show available memory" },
+            { name: "Startup Programs", command: "Get-CimInstance Win32_StartupCommand", description: "List startup programs" },
+            { name: "Environment Variables", command: "Get-ChildItem Env:", description: "Display environment variables" },
+            { name: "Hotfixes", command: "Get-HotFix", description: "List installed hotfixes" },
+            { name: "DNS Cache", command: "Get-DnsClientCache", description: "Display DNS cache" },
+            { name: "Active Connections", command: "Get-NetTCPConnection -State Established", description: "Show active network connections" }
+        ];
+
+        // Initialize
+        let savedCommands = JSON.parse(localStorage.getItem('savedCommands')) || defaultCommands;
+        renderCommands();
+
+        function renderCommands(filter = '') {
+            const commandList = document.getElementById('commandList');
+            commandList.innerHTML = '';
+            
+            const filtered = savedCommands.filter(cmd => 
+                cmd.name.toLowerCase().includes(filter.toLowerCase()) ||
+                cmd.command.toLowerCase().includes(filter.toLowerCase()) ||
+                (cmd.description && cmd.description.toLowerCase().includes(filter.toLowerCase()))
+            );
+
+            filtered.forEach((cmd, index) => {
+                const div = document.createElement('div');
+                div.className = 'command-item';
+                div.style.animationDelay = `${index * 0.05}s`;
+                div.innerHTML = `
+                    <div class="command-name">${cmd.name}</div>
+                    <div class="command-desc">${cmd.description || cmd.command}</div>
+                `;
+                div.onclick = () => selectCommand(cmd.command);
+                commandList.appendChild(div);
+            });
+        }
+
+        function selectCommand(command) {
+            document.getElementById('commandInput').value = command;
+        }
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+        }
+
+        function openAddCommandModal() {
+            document.getElementById('addCommandModal').classList.add('active');
+        }
+
+        function closeAddCommandModal() {
+            document.getElementById('addCommandModal').classList.remove('active');
+            document.getElementById('commandName').value = '';
+            document.getElementById('commandText').value = '';
+            document.getElementById('commandDescription').value = '';
+        }
+
+        function saveCommand() {
+            const name = document.getElementById('commandName').value;
+            const command = document.getElementById('commandText').value;
+            const description = document.getElementById('commandDescription').value;
+
+            if (name && command) {
+                savedCommands.push({ name, command, description });
+                localStorage.setItem('savedCommands', JSON.stringify(savedCommands));
+                renderCommands();
+                closeAddCommandModal();
+            }
+        }
+
+        document.getElementById('searchBox').addEventListener('input', (e) => {
+            renderCommands(e.target.value);
+        });
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                executeCommand();
+            }
+        }
+
+        async function executeCommand() {
+            const input = document.getElementById('commandInput');
+            const command = input.value.trim();
+            
+            if (!command) return;
+
+            const output = document.getElementById('output');
+            
+            // Add command to output
+            const commandLine = document.createElement('div');
+            commandLine.className = 'output-line';
+            commandLine.innerHTML = `<span class="output-prompt">PS></span> ${command}`;
+            output.appendChild(commandLine);
+
+            // Show loading
+            const loadingLine = document.createElement('div');
+            loadingLine.className = 'output-line';
+            loadingLine.innerHTML = '<span class="loading"></span> Executing...';
+            output.appendChild(loadingLine);
+            output.scrollTop = output.scrollHeight;
+
+            try {
+                const response = await fetch('/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command })
+                });
+
+                const result = await response.json();
+                
+                // Remove loading
+                output.removeChild(loadingLine);
+
+                // Add output
+                if (result.stdout) {
+                    const outputLine = document.createElement('div');
+                    outputLine.className = 'output-line output-success';
+                    outputLine.textContent = result.stdout;
+                    output.appendChild(outputLine);
+                }
+
+                if (result.stderr) {
+                    const errorLine = document.createElement('div');
+                    errorLine.className = 'output-line output-error';
+                    errorLine.textContent = result.stderr;
+                    output.appendChild(errorLine);
+                }
+            } catch (error) {
+                output.removeChild(loadingLine);
+                const errorLine = document.createElement('div');
+                errorLine.className = 'output-line output-error';
+                errorLine.textContent = `Error: ${error.message}`;
+                output.appendChild(errorLine);
+            }
+
+            output.scrollTop = output.scrollHeight;
+            input.value = '';
+        }
+    </script>
+</body>
+</html>
