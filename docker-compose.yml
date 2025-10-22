@@ -7,7 +7,9 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./powershell_scripts:/app/powershell_scripts
+      - ./powershell_scripts:C:/app/powershell_scripts
     restart: unless-stopped
     environment:
       - TZ=America/Los_Angeles
+    # Windows container isolation mode
+    isolation: process

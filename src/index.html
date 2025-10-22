@@ -473,28 +473,28 @@
     </div>
 
     <script>
-        // Default Windows Admin Commands
+        // Windows PowerShell Admin Commands
         const defaultCommands = [
-            { name: "Get System Info", command: "Get-ComputerInfo", description: "Display detailed system information" },
-            { name: "List Services", command: "Get-Service", description: "List all Windows services" },
-            { name: "List Processes", command: "Get-Process", description: "Display all running processes" },
-            { name: "Disk Usage", command: "Get-PSDrive -PSProvider FileSystem", description: "Show disk space usage" },
-            { name: "Network Adapters", command: "Get-NetAdapter", description: "List network adapters" },
-            { name: "IP Configuration", command: "Get-NetIPConfiguration", description: "Display IP configuration" },
-            { name: "Event Log Errors", command: "Get-EventLog -LogName System -EntryType Error -Newest 10", description: "Show recent system errors" },
-            { name: "Windows Updates", command: "Get-WindowsUpdate", description: "Check for Windows updates" },
-            { name: "Installed Programs", command: "Get-WmiObject -Class Win32_Product | Select-Object Name, Version", description: "List installed programs" },
-            { name: "User Accounts", command: "Get-LocalUser", description: "List local user accounts" },
-            { name: "Group Members", command: "Get-LocalGroupMember -Group 'Administrators'", description: "Show administrators group members" },
-            { name: "Scheduled Tasks", command: "Get-ScheduledTask", description: "List scheduled tasks" },
-            { name: "Firewall Rules", command: "Get-NetFirewallRule | Where-Object {$_.Enabled -eq 'True'}", description: "Show enabled firewall rules" },
-            { name: "CPU Usage", command: "Get-Counter '\\Processor(_Total)\\% Processor Time'", description: "Display CPU usage" },
-            { name: "Memory Usage", command: "Get-Counter '\\Memory\\Available MBytes'", description: "Show available memory" },
-            { name: "Startup Programs", command: "Get-CimInstance Win32_StartupCommand", description: "List startup programs" },
-            { name: "Environment Variables", command: "Get-ChildItem Env:", description: "Display environment variables" },
-            { name: "Hotfixes", command: "Get-HotFix", description: "List installed hotfixes" },
-            { name: "DNS Cache", command: "Get-DnsClientCache", description: "Display DNS cache" },
-            { name: "Active Connections", command: "Get-NetTCPConnection -State Established", description: "Show active network connections" }
+            { name: "Get System Info", command: "Get-ComputerInfo | Select-Object CsName, WindowsVersion, OsArchitecture, CsProcessors", description: "Display detailed system information" },
+            { name: "List Services", command: "Get-Service | Format-Table -AutoSize", description: "List all Windows services" },
+            { name: "List Processes", command: "Get-Process | Format-Table -AutoSize", description: "Display all running processes" },
+            { name: "Top Processes", command: "Get-Process | Sort-Object CPU -Descending | Select-Object -First 10 | Format-Table -AutoSize", description: "Show top 10 CPU processes" },
+            { name: "Disk Usage", command: "Get-PSDrive -PSProvider FileSystem | Format-Table -AutoSize", description: "Show disk space usage" },
+            { name: "Network Adapters", command: "Get-NetAdapter | Format-Table -AutoSize", description: "List network adapters" },
+            { name: "IP Configuration", command: "Get-NetIPConfiguration | Format-List", description: "Display IP configuration" },
+            { name: "Event Log Errors", command: "Get-EventLog -LogName System -EntryType Error -Newest 10 | Format-Table -AutoSize", description: "Show recent system errors" },
+            { name: "Installed Programs", command: "Get-WmiObject -Class Win32_Product | Select-Object Name, Version | Format-Table -AutoSize", description: "List installed programs" },
+            { name: "User Accounts", command: "Get-LocalUser | Format-Table -AutoSize", description: "List local user accounts" },
+            { name: "Group Members", command: "Get-LocalGroupMember -Group 'Administrators' | Format-Table -AutoSize", description: "Show administrators group members" },
+            { name: "Scheduled Tasks", command: "Get-ScheduledTask | Where-Object {$_.State -eq 'Ready'} | Format-Table -AutoSize", description: "List ready scheduled tasks" },
+            { name: "Firewall Rules", command: "Get-NetFirewallRule | Where-Object {$_.Enabled -eq 'True'} | Select-Object -First 20 | Format-Table -AutoSize", description: "Show enabled firewall rules" },
+            { name: "Environment Variables", command: "Get-ChildItem Env: | Format-Table -AutoSize", description: "Display environment variables" },
+            { name: "Hotfixes", command: "Get-HotFix | Format-Table -AutoSize", description: "List installed hotfixes" },
+            { name: "Active Connections", command: "Get-NetTCPConnection -State Established | Format-Table -AutoSize", description: "Show active network connections" },
+            { name: "Windows Features", command: "Get-WindowsOptionalFeature -Online | Where-Object {$_.State -eq 'Enabled'} | Format-Table -AutoSize", description: "List enabled Windows features" },
+            { name: "Startup Programs", command: "Get-CimInstance Win32_StartupCommand | Format-Table -AutoSize", description: "List startup programs" },
+            { name: "System Uptime", command: "(Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime", description: "Show system uptime" },
+            { name: "Current User", command: "$env:USERNAME", description: "Show current user" }
         ];
 
         // Initialize
@@ -566,6 +566,92 @@
             }
         }
 
+        function parseAnsi(text) {
+            // Convert ANSI escape codes to HTML
+            // Handle both actual escape sequences (\x1b) and literal bracket sequences [
+            const ansiRegex = /(?:\x1b|\[)(\d+(?:;\d+)*)m/g;
+            
+            // ANSI color and style map
+            const colorMap = {
+                '30': '#000000', '31': '#f38ba8', '32': '#a6e3a1',
+                '33': '#f9e2af', '34': '#89b4fa', '35': '#cba6f7',
+                '36': '#94e2d5', '37': '#cdd6f4',
+                '90': '#6c7086', '91': '#f38ba8', '92': '#a6e3a1',
+                '93': '#f9e2af', '94': '#89b4fa', '95': '#cba6f7',
+                '96': '#94e2d5', '97': '#ffffff'
+            };
+            
+            let result = '';
+            let lastIndex = 0;
+            let currentColor = '';
+            let currentBold = false;
+            let currentItalic = false;
+            let currentUnderline = false;
+            
+            const matches = [...text.matchAll(ansiRegex)];
+            
+            if (matches.length === 0) {
+                return text.replace(/</g, '<').replace(/>/g, '>');
+            }
+            
+            matches.forEach((match, i) => {
+                // Add text before this match
+                const textBefore = text.substring(lastIndex, match.index);
+                if (textBefore) {
+                    let style = '';
+                    if (currentColor) style += `color: ${currentColor}; `;
+                    if (currentBold) style += 'font-weight: bold; ';
+                    if (currentItalic) style += 'font-style: italic; ';
+                    if (currentUnderline) style += 'text-decoration: underline; ';
+                    
+                    if (style) {
+                        result += `<span style="${style}">${textBefore.replace(/</g, '<').replace(/>/g, '>')}</span>`;
+                    } else {
+                        result += textBefore.replace(/</g, '<').replace(/>/g, '>');
+                    }
+                }
+                
+                // Process the ANSI codes
+                const codes = match[1].split(';');
+                codes.forEach(code => {
+                    if (code === '0') {
+                        currentColor = '';
+                        currentBold = false;
+                        currentItalic = false;
+                        currentUnderline = false;
+                    } else if (code === '1') {
+                        currentBold = true;
+                    } else if (code === '3') {
+                        currentItalic = true;
+                    } else if (code === '4') {
+                        currentUnderline = true;
+                    } else if (colorMap[code]) {
+                        currentColor = colorMap[code];
+                    }
+                });
+                
+                lastIndex = match.index + match[0].length;
+            });
+            
+            // Add remaining text
+            const remaining = text.substring(lastIndex);
+            if (remaining) {
+                let style = '';
+                if (currentColor) style += `color: ${currentColor}; `;
+                if (currentBold) style += 'font-weight: bold; ';
+                if (currentItalic) style += 'font-style: italic; ';
+                if (currentUnderline) style += 'text-decoration: underline; ';
+                
+                if (style) {
+                    result += `<span style="${style}">${remaining.replace(/</g, '<').replace(/>/g, '>')}</span>`;
+                } else {
+                    result += remaining.replace(/</g, '<').replace(/>/g, '>');
+                }
+            }
+            
+            return result;
+        }
+
         async function executeCommand() {
             const input = document.getElementById('commandInput');
             const command = input.value.trim();
@@ -599,19 +685,29 @@
                 // Remove loading
                 output.removeChild(loadingLine);
 
-                // Add output
+                // Add output with ANSI parsing
                 if (result.stdout) {
-                    const outputLine = document.createElement('div');
-                    outputLine.className = 'output-line output-success';
-                    outputLine.textContent = result.stdout;
-                    output.appendChild(outputLine);
+                    const lines = result.stdout.split('\n');
+                    lines.forEach(line => {
+                        if (line.trim()) {
+                            const outputLine = document.createElement('div');
+                            outputLine.className = 'output-line';
+                            outputLine.innerHTML = parseAnsi(line);
+                            output.appendChild(outputLine);
+                        }
+                    });
                 }
 
                 if (result.stderr) {
-                    const errorLine = document.createElement('div');
-                    errorLine.className = 'output-line output-error';
-                    errorLine.textContent = result.stderr;
-                    output.appendChild(errorLine);
+                    const lines = result.stderr.split('\n');
+                    lines.forEach(line => {
+                        if (line.trim()) {
+                            const errorLine = document.createElement('div');
+                            errorLine.className = 'output-line output-error';
+                            errorLine.innerHTML = parseAnsi(line);
+                            output.appendChild(errorLine);
+                        }
+                    });
                 }
             } catch (error) {
                 output.removeChild(loadingLine);

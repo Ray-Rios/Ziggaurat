@@ -1,6 +1,7 @@
 const std = @import("std");
 const http = std.http;
 const net = std.net;
+const posix = std.posix;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -8,26 +9,29 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     const address = try net.Address.parseIp("0.0.0.0", 80);
-    var server = net.StreamServer.init(.{
-        .reuse_address = true,
-    });
-    defer server.deinit();
+    const socket = try posix.socket(address.any.family, posix.SOCK.STREAM, posix.IPPROTO.TCP);
+    defer posix.close(socket);
     
-    try server.listen(address);
+    try posix.setsockopt(socket, posix.SOL.SOCKET, posix.SO.REUSEADDR, &std.mem.toBytes(@as(c_int, 1)));
+    try posix.bind(socket, &address.any, address.getOsSockLen());
+    try posix.listen(socket, 128);
 
     std.debug.print("Server listening on http://0.0.0.0:80\n", .{});
 
     while (true) {
-        const connection = try server.accept();
-        _ = try std.Thread.spawn(.{}, handleConnection, .{ allocator, connection });
+        var client_address: net.Address = undefined;
+        var client_address_len: posix.socklen_t = @sizeOf(net.Address);
+        const client_socket = try posix.accept(socket, &client_address.any, &client_address_len, 0);
+        
+        _ = try std.Thread.spawn(.{}, handleConnection, .{ allocator, client_socket });
     }
 }
 
-fn handleConnection(allocator: std.mem.Allocator, connection: net.StreamServer.Connection) !void {
-    defer connection.stream.close();
+fn handleConnection(allocator: std.mem.Allocator, socket: posix.socket_t) !void {
+    defer posix.close(socket);
 
     var read_buffer: [4096]u8 = undefined;
-    const bytes_read = try connection.stream.read(&read_buffer);
+    const bytes_read = try posix.read(socket, &read_buffer);
     
     if (bytes_read == 0) return;
 
@@ -35,15 +39,15 @@ fn handleConnection(allocator: std.mem.Allocator, connection: net.StreamServer.C
     
     // Simple routing
     if (std.mem.indexOf(u8, request, "GET / ")) |_| {
-        try serveIndex(connection.stream);
+        try serveIndex(socket);
     } else if (std.mem.indexOf(u8, request, "POST /execute")) |_| {
-        try executeCommand(allocator, connection.stream, request);
+        try executeCommand(allocator, socket, request);
     } else {
-        try serve404(connection.stream);
+        try serve404(socket);
     }
 }
 
-fn serveIndex(stream: net.Stream) !void {
+fn serveIndex(socket: posix.socket_t) !void {
     const html = @embedFile("index.html");
     const response = try std.fmt.allocPrint(
         std.heap.page_allocator,
@@ -51,12 +55,12 @@ fn serveIndex(stream: net.Stream) !void {
         .{ html.len, html }
     );
     defer std.heap.page_allocator.free(response);
-    _ = try stream.write(response);
+    _ = try posix.write(socket, response);
 }
 
-fn serve404(stream: net.Stream) !void {
+fn serve404(socket: posix.socket_t) !void {
     const response = "HTTP/1.1 404 Not Found\r\nContent-Length: 9\r\n\r\nNot Found";
-    _ = try stream.write(response);
+    _ = try posix.write(socket, response);
 }
 
 fn escapeJson(allocator: std.mem.Allocator, input: []const u8) ![]u8 {
@@ -85,7 +89,7 @@ fn escapeJson(allocator: std.mem.Allocator, input: []const u8) ![]u8 {
     return escaped.toOwnedSlice();
 }
 
-fn executeCommand(allocator: std.mem.Allocator, stream: net.Stream, request: []const u8) !void {
+fn executeCommand(allocator: std.mem.Allocator, socket: posix.socket_t, request: []const u8) !void {
     // Extract command from request body
     const body_start = std.mem.indexOf(u8, request, "\r\n\r\n") orelse return error.InvalidRequest;
     const body = request[body_start + 4..];
@@ -99,8 +103,8 @@ fn executeCommand(allocator: std.mem.Allocator, stream: net.Stream, request: []c
         }
     }
 
-    // Execute PowerShell command
-    var child = std.process.Child.init(&[_][]const u8{ "pwsh", "-Command", command }, allocator);
+    // Execute PowerShell command (using Windows PowerShell, not PowerShell Core)
+    var child = std.process.Child.init(&[_][]const u8{ "powershell.exe", "-Command", command }, allocator);
     child.stdout_behavior = .Pipe;
     child.stderr_behavior = .Pipe;
     
@@ -135,5 +139,5 @@ fn executeCommand(allocator: std.mem.Allocator, stream: net.Stream, request: []c
     );
     defer allocator.free(response);
     
-    _ = try stream.write(response);
+    _ = try posix.write(socket, response);
 }

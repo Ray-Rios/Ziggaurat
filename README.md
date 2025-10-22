@@ -37,13 +37,19 @@ A beautiful, modern web-based PowerShell terminal built with Zig, featuring a co
 
 - **Backend**: Zig web server (high-performance, memory-safe)
 - **Frontend**: Pure HTML, CSS, and JavaScript (no dependencies)
-- **Container**: Docker with Ubuntu 22.04
-- **PowerShell**: PowerShell 7.x for cross-platform compatibility
+- **Container**: Docker with Windows Server Core 2022
+- **PowerShell**: Windows PowerShell with full cmdlet support
 
 ## Prerequisites
 
-- Docker
+- Docker Desktop for Windows with Windows containers enabled
 - Docker Compose (optional, but recommended)
+- Windows 10/11 or Windows Server 2019/2022
+
+**Important**: This application requires Windows containers. Make sure Docker Desktop is switched to Windows container mode:
+1. Right-click Docker Desktop system tray icon
+2. Select "Switch to Windows containers..."
+3. Wait for Docker to restart
 
 ## Quick Start
 
@@ -116,9 +122,9 @@ Commands are stored in your browser's local storage. To add a new command:
    ```
 
 3. **Shell Access**
-   - Access the container shell for debugging:
+   - Access the container PowerShell for debugging:
    ```bash
-   docker exec -it powershell-terminal /bin/bash
+   docker exec -it powershell-terminal powershell
    ```
 
 4. **Custom PowerShell Scripts**
@@ -209,14 +215,27 @@ const defaultCommands = [
 # Check container logs
 docker logs powershell-terminal
 
-# Verify port availability
-netstat -an | grep :80
+# Verify port availability (Windows)
+netstat -an | findstr :80
 ```
 
+### Docker Not in Windows Container Mode
+If you see errors about Linux containers:
+1. Right-click Docker Desktop in system tray
+2. Select "Switch to Windows containers..."
+3. Confirm the switch and wait for Docker to restart
+4. Rebuild and restart the container
+
 ### PowerShell Commands Fail
-- Ensure PowerShell is properly installed in the container
-- Check command syntax (use PowerShell 7 syntax)
+- Ensure the container is using Windows Server Core base image
+- Check command syntax (use Windows PowerShell syntax)
+- Some cmdlets may require additional Windows features or modules
 - Verify container has necessary permissions
+
+### Build Errors with Zig
+- Windows containers may take longer to build (first time can be 10-20 minutes)
+- Ensure you have sufficient disk space (Windows images are larger)
+- If Chocolatey installation fails, check your internet connection
 
 ### UI Not Loading
 - Clear browser cache
